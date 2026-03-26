@@ -1,1 +1,1 @@
-DBPWORD="troll"
+DBPWORD=""
