@@ -1,10 +1,11 @@
 from dbpword import DBPWORD
 import psycopg2
+import json 
 
 # noinspection SpellCheckingInspection
 conn = psycopg2.connect(
-    dbname="trelldb",
-    user="trell",
+    dbname="trelltestdb",
+    user="troll",
     password=DBPWORD,
     host="localhost"
 )
@@ -12,9 +13,24 @@ conn = psycopg2.connect(
 cur = conn.cursor()
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI()
+
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[#потом поменять на домен
+        "http://localhost:5173",
+        "http://127.18.0.1:5173",
+        "http://130.49.148.168:5173",
+        ],  
+    allow_credentials=True,
+    allow_methods=["*"],  # POST, GET, PUT и т.д.
+    allow_headers=["*"],
+)
 
 # Pydantic-модель для валидации входящих данных
 class User(BaseModel):
@@ -27,10 +43,31 @@ class Board(BaseModel):
     board_name: str
     address: str
     about: str | None
+    contents: dict | None
 
 class Link(BaseModel):
     user_id: int
     board_id: int
+
+
+#модели объектов с доски, пожалуйста спид мне это нужно
+class Task(BaseModel):
+    id: str
+    text: str
+    done: bool
+
+class Card(BaseModel):
+    id: str
+    title: str
+    tasks: list[Task]
+
+class Column(BaseModel):
+    id: str
+    title: str
+    cards: list[Card]
+
+class BoardContents(BaseModel):
+    columns: list[Column]
 
 # 1. READ: Получить всех пользователей
 @app.get("/users")
@@ -138,13 +175,21 @@ def check_access(board_id : int, user_id : int):
     result = cur.fetchone()
     return bool(result)
 
-# 3. UPDATE: изменение на доске
+# 2. READ: Получить содержимое доски
+@app.get("/boards/{board_id}")
+def get_board_data(board_id : int):
+    cur.execute("SELECT contents FROM boards WHERE board_id = %s;", (board_id,))
+    result = cur.fetchone()[0]
+    return result
 
+# 3. UPDATE: изменение на доске
 @app.put("/boards/{board_id}")
-def update_board(board_id: int, contents: str):
+def update_board(board_id: int, board_contents: BoardContents):
+    contents_json = json.dumps(board_contents.dict())
     # Ищем задачу по ID
+    
     cur.execute("UPDATE boards SET contents = %s WHERE board_id = %s RETURNING address,contents;",
-                (contents,str(board_id)))
+                (contents_json,str(board_id)))
     result = cur.fetchone()
     conn.commit()
     return result
