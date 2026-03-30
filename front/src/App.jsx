@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Board from "./Board.jsx";
+import Register from "./Register.jsx"
+import Boardslist from "./Boardslist.jsx"
 
 function Home() {
   const [users, setUsers] = useState([]);
@@ -82,6 +84,10 @@ function Home() {
       </div>
 
       <a href="/board">Открыть доску</a>
+        <br/>
+      <a href="/register">Регистрация</a>
+      <br/>
+      <a href="/temp">темп</a>
     </div>
   );
 }
@@ -92,6 +98,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/board" element={<Board />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/temp" element={<Boardslist />} />
       </Routes>
     </BrowserRouter>
   );

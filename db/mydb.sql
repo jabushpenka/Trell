@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS public."user"
-DROP TABLE IF EXISTS public."board"
-DROP TABLE IF EXISTS public."link"
+DROP TABLE IF EXISTS public."user";
+DROP TABLE IF EXISTS public."board";
+DROP TABLE IF EXISTS public."link";
 
 CREATE TABLE IF NOT EXISTS "users" (
     "user_id"   SERIAL NOT NULL,
 	"name"  varchar(40) NOT NULL UNIQUE,
-	"password"	varchar(40) NOT NULL,
+	"password"	TEXT NOT NULL,
 	"email"	varchar(40) NOT NULL UNIQUE,
 	"photo"	varchar(40),
 	PRIMARY KEY("user_id")

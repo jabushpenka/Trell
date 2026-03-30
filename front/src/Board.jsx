@@ -11,11 +11,11 @@ import taskbutton from './assets/task-button.svg';
 export default function Board() {
   const [boardData,setBoardData] = useState({columns: []});
 
-  // useEffect(() => {
-  //   fetch("http://130.49.148.168:8448/api/board")
-  //     .then(res => res.json())
-  //     .then(data => setBoardData(data));
-  // }, []);
+  useEffect(() => {
+    fetch("http://130.49.148.168:8448/boards/228")
+      .then(res => res.json())
+      .then(data => setBoardData(data));
+  }, []);
 
   const [newColumnName, setNewColumnName] = useState("");
   
@@ -119,6 +119,14 @@ export default function Board() {
           onChange={(e) => setNewColumnName(e.target.value)}
         />
         <button className="addcolumn" onClick={() => addColumn()}>Добавить колонку</button>
+        <button className="addcolumn" onClick={async () => {
+          await fetch("http://130.49.148.168:8448/boards/228",{
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(boardData),
+          })}}>Сохранить</button>
       </div>
 
       <div className="columns">
