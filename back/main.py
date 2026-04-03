@@ -1,47 +1,55 @@
 import psycopg2
-import json 
+import json
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from passlib.context import CryptContext
 from jose import jwt
+from dotenv import load_dotenv
 import os
-import bcrypt
+
+# переменные окружения
+load_dotenv()
 
 # noinspection SpellCheckingInspection
+# подключение к базе
 conn = psycopg2.connect(
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    host=os.getenv("DB_HOST")
+    dbname=os.getenv("DBNAME"),
+    user=os.getenv("DBUSER"),
+    password=os.getenv("DBPWORD"),
+    host=os.getenv("DBHOST")
 )
 
 cur = conn.cursor()
 
+# само приложение
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[#потом поменять на домен
+    allow_origins=[  # потом поменять на домен
         "http://localhost:5173",
         "http://127.18.0.1:5173",
         "http://130.49.148.168:5173",
-        ],  
+    ],
     allow_credentials=True,
     allow_methods=["*"],  # POST, GET, PUT и т.д.
     allow_headers=["*"],
 )
 
+# настройки шифрования
 SECRET_KEY = str(os.getenv("SECRET_KEY"))
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-# Pydantic-модель для валидации входящих данных
+
+# Pydantic-модели для валидации входящих данных
 class User(BaseModel):
     user_name: str
-    password: str
+    pword: str
     email: str
     photo: str | None = "default.png"
+
 
 class Board(BaseModel):
     board_name: str
@@ -49,79 +57,86 @@ class Board(BaseModel):
     about: str | None
     contents: dict | None
 
+
 class Link(BaseModel):
-    user_id: int
-    board_id: int
+    user_name: str
+    address: str
+    role_name: str = "Worker"
 
-
-#модели объектов с доски, пожалуйста спид мне это нужно
+# модели объектов с доски, пожалуйста спид мне это нужно
 class Task(BaseModel):
     id: str
     text: str
-    done: bool
+    done: bool = False
+
 
 class Card(BaseModel):
     id: str
     title: str
     tasks: list[Task]
 
+
 class Column(BaseModel):
     id: str
     title: str
     cards: list[Card]
 
+
 class BoardContents(BaseModel):
     columns: list[Column]
 
-#модель для логина
+
+# модель для логина
 class Login(BaseModel):
     login: str
-    password: str
+    pword: str
 
 
-#хеширование и проверка пароля
+# хеширование пароля
 def hash_password(password: str):
     return pwd_context.hash(password)
 
+# проверка пароля
 def verify_password(password: str, hashed: str):
     return pwd_context.verify(password, hashed)
 
+# отмена изменений для undocumented случаев
+def cancel(error: Exception):
+    conn.rollback()
+    print(error)
+    raise HTTPException(status_code=400, detail=str(error))
 
-# 1. CREATE: Регистрация нового пользователя
+# Регистрация нового пользователя
 @app.post("/register")
-def register_user(user:User):
-    cur = conn.cursor()
+def register_user(user: User):
     new_user = user.model_dump()  # Превращаем Pydantic-модель в словарь
     user_name = new_user["user_name"]
-    password = new_user["password"]
+    pword = new_user["pword"]
     email = new_user["email"]
     photo = new_user["photo"]
-    
-    hashed = hash_password(password)
+
+    hashed = hash_password(pword)
 
     try:
-        cur.execute("INSERT INTO users (name,password,email,photo)"
-            "VALUES (%s, %s, %s, %s) RETURNING user_id;",
-            (user_name, hashed, email, photo))
+        cur.execute("INSERT INTO users (user_name,pword,email,photo)"
+                    "VALUES (%s, %s, %s, %s) RETURNING user_id;",
+                    (user_name, hashed, email, photo))
         result = cur.fetchone()
         conn.commit()
+        return result
     except Exception as e:
-        conn.rollback()
-        print(e)
-        raise HTTPException(status_code=400, detail="User already exists")
+        cancel(e)
 
-    return result
-
-# 2. READ: Проверка данных пользователя (логин)
+# Проверка данных пользователя (логин)
 @app.post("/login")
-def login(data: User):
-    cur = conn.cursor()
-    login = data.user_name
-    password = data.password
+def login_user(login_info: Login):
+    data = login_info.model_dump()
+    user_name = data["login"]
+    pword = data["pword"]
 
     cur.execute(
-        "SELECT password FROM users WHERE name = %s",
-        (login,)
+        "SELECT pword FROM users WHERE user_name = %s",
+        (user_name,)
     )
     result = cur.fetchone()
 
@@ -130,131 +145,224 @@ def login(data: User):
 
     stored_hash = result[0]
 
-    if not verify_password(password, stored_hash):
+    if not verify_password(pword, stored_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = jwt.encode({"sub": login}, SECRET_KEY, algorithm="HS256") #sha256 с ключом
+    token = jwt.encode({"sub": user_name}, SECRET_KEY, algorithm="HS256")  # sha256 с ключом
 
     return {"access_token": token}
 
-# 1. READ: Получить всех пользователей
+
+# Получить пользователей (для дебага)
 @app.get("/users")
-def get_users():
-    cur.execute("SELECT * FROM users;")
+def get_users(skip: int = 0, limit: int = 10):
+    cur.execute("SELECT * FROM users OFFSET %s LIMIT %s;",(skip,limit))
     result = cur.fetchall()
     return result
 
-# 2. CREATE: Создать нового пользователя
-@app.post("/users")
-def create_user(user: User):
-    new_user = user.model_dump()  # Превращаем Pydantic-модель в словарь
-    user_name = new_user["user_name"]
-    pword = new_user["pword"]
-    email = new_user["email"]
-    photo = new_user["photo"]
+# Удалить пользователя по имени
+@app.delete("/users/{user_name}")
+def delete_user(user_name: str):
+    try:
+        cur.execute("DELETE FROM users WHERE user_name = %s RETURNING user_id;", (user_name,))
+        result = cur.fetchone()
+        if not bool(result):
+            raise HTTPException(status_code=400, detail="User does not exist")
+        conn.commit()
+        return {"Deleted user ID": result}
+    except Exception as e:
+        cancel(e)
 
-    # Сохраняем в базу
-    cur.execute("INSERT INTO users (user_name,pword,email,photo) VALUES"
-                "(%s,%s,%s,%s) RETURNING user_id;",
-                (user_name,pword,email,photo))
-    result = cur.fetchone()
-    conn.commit()
-    return result
 
-# 4. DELETE: Удалить пользователя по ID
-@app.delete("/users/{user_id}")
-def delete_user(user_id: int):
-    cur.execute("DELETE FROM users WHERE user_id = %s RETURNING user_name;",str(user_id))
-    result = cur.fetchone()
-    conn.commit()
-    return {"Deleted user name": result}
-
-# 1. READ: Получить все доски
+# Получить доски (для дебага)
 @app.get("/boards")
-def get_boards():
-    cur.execute("SELECT * FROM boards;")
+def get_boards(skip: int = 0, limit: int = 10):
+    cur.execute("SELECT * FROM boards OFFSET %s LIMIT %s;",(skip,limit))
     result = cur.fetchall()
     return result
 
-# 2. CREATE: Создать новую доску
+
+# Создать новую доску
 @app.post("/boards")
-def create_board(board: Board, user_id: int):
+def create_board(board: Board, owner_name: str):
+    cur.execute("SELECT user_id FROM users WHERE user_name = %s",(owner_name,))
+    res = cur.fetchone()
+    if not bool(res):
+        raise HTTPException(status_code=400, detail="Owner does not exist")
+    owner_id = res[0]
+
     new_board = board.model_dump()  # Превращаем Pydantic-модель в словарь
     board_name = new_board["board_name"]
     address = new_board["address"]
     about = new_board["about"]
 
+    cur.execute("SELECT board_id FROM boards WHERE address = %s", (address,))
+    res = cur.fetchone()
+    if bool(res):
+        raise HTTPException(status_code=400, detail="Board address taken")
+
     # Сохраняем в базу
-    cur.execute("INSERT INTO boards (board_name,address,about) VALUES"
-                "(%s,%s,%s) RETURNING board_id;",
-                (board_name,address,about))
-    board_id = cur.fetchone()[0]
-    conn.commit()
+    try:
+        cur.execute("INSERT INTO boards (board_name,address,about) VALUES"
+                    "(%s,%s,%s) RETURNING board_id;",
+                    (board_name, address, about))
+        board_id = cur.fetchone()[0]
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(e)
+        raise HTTPException(status_code=400, detail=str(e))
 
-    cur.execute("INSERT INTO link (user_id,board_id) VALUES"
-                "(%s,%s) RETURNING user_id;",
-                (user_id,board_id))
-    u_id = cur.fetchone()[0]
-    conn.commit()
+    try:
+        cur.execute("INSERT INTO links (user_id,board_id,role_id) VALUES"
+                    "(%s,%s,1) RETURNING user_id;",
+                    (owner_id, board_id))
+        conn.commit()
+    except Exception as e:
+        cancel(e)
 
-    result = {"board_id": board_id, "owner_user_id":u_id}
+    result = {"board_id": board_id, "owner_id": owner_id}
     return result
 
-# 4. DELETE: Удалить доску по ID
-@app.delete("/boards/{board_id}")
-def delete_board(board_id: int):
-    b_id = str(board_id)
 
-    cur.execute("DELETE FROM link WHERE board_id = %s;", b_id)
+# Удалить доску по адресу
+@app.delete("/boards/{address}")
+def delete_board(address: str):
+    try:
+        cur.execute("DELETE FROM boards WHERE address = %s RETURNING board_id;",
+                    (address,))
+        result = cur.fetchone()
+        if not bool(result):
+            raise HTTPException(status_code=400, detail="Board does not exist")
+        conn.commit()
+        return {"Deleted board ID": result}
+    except Exception as e:
+        cancel(e)
 
-    cur.execute("DELETE FROM boards WHERE board_id = %s RETURNING address;",b_id)
-    result = cur.fetchone()
-    conn.commit()
-    return {"Deleted board address": result}
 
-# 1. READ: Получить все связи
+
+# Получить все связи (для дебага)
 @app.get("/links")
-def get_links():
-    cur.execute("SELECT * FROM link;")
+def get_links(skip: int = 0, limit: int = 10):
+    cur.execute("SELECT users.user_name, boards.address, roles.role_name FROM "
+                "( links INNER JOIN users ON links.user_id = users.user_id "
+                "INNER JOIN "
+                "boards ON links.board_id = boards.board_id "
+                "INNER JOIN "
+                "roles ON links.role_id = roles.role_id ) "
+                "OFFSET %s LIMIT %s;",
+                (skip,limit))
     result = cur.fetchall()
     return result
 
-# 2. CREATE: Создать новую связь
+
+# Выдать пользователю роль на доске
 @app.post("/links")
-def create_link(link: Link):
+def give_role(link: Link):
     new_link = link.model_dump()  # Превращаем Pydantic-модель в словарь
-    user_id = new_link["user_id"]
-    board_id = new_link["board_id"]
+
+    user_name = new_link["user_name"]
+    cur.execute("SELECT user_id FROM users WHERE user_name = %s",
+                (user_name,))
+    res = cur.fetchone()
+    if not bool(res):
+        raise HTTPException(status_code=400, detail="User does not exist")
+    user_id = res[0]
+
+    address = new_link["address"]
+    cur.execute("SELECT board_id FROM boards WHERE address = %s",
+                (address,))
+    res = cur.fetchone()
+    if not bool(res):
+        raise HTTPException(status_code=400, detail="Board does not exist")
+    board_id = res[0]
+
+    role_name = new_link["role_name"]
+    cur.execute("SELECT role_id FROM roles WHERE role_name = %s",
+                (role_name,))
+    res = cur.fetchone()
+    if not bool(res):
+        raise HTTPException(status_code=400, detail="Role does not exist")
+    role_id = res[0]
+
 
     # Сохраняем в базу
-    cur.execute("INSERT INTO link (user_id,board_id) VALUES"
-                "(%s,%s) RETURNING user_id,board_id;",
-                (user_id,board_id))
-    result = cur.fetchone()
-    conn.commit()
+    try:
+        cur.execute("SELECT * FROM links WHERE user_id = %s AND board_id = %s",
+                    (user_id, board_id))
+        res = cur.fetchone()
+        if not bool(res):
+            cur.execute("INSERT INTO links (user_id,board_id,role_id) VALUES"
+                        "(%s,%s,%s) RETURNING user_id,board_id,role_id;",
+                        (user_id, board_id, role_id))
+        else:
+            cur.execute("UPDATE links SET role_id = %s WHERE user_id = %s AND board_id = %s RETURNING user_id, board_id, role_id;",
+                        (role_id, user_id, board_id))
+
+
+        result = cur.fetchone()
+        conn.commit()
+        return result
+    except Exception as e:
+        cancel(e)
+
+
+# Проверить роль пользователя на доске
+@app.get("/boards/{address}/{user_name}")
+def check_access(address: str, user_name: str):
+    cur.execute("SELECT board_id FROM boards WHERE address = %s",
+                (address,))
+    res = cur.fetchone()
+    if not bool(res):
+        raise HTTPException(status_code=400, detail="Board does not exist")
+    board_id = res[0]
+
+    cur.execute("SELECT user_id FROM users WHERE user_name = %s",
+                (user_name,))
+    res = cur.fetchone()
+    if not bool(res):
+        raise HTTPException(status_code=400, detail="User does not exist")
+    user_id = res[0]
+
+    cur.execute("SELECT role_id FROM links WHERE board_id = %s AND user_id = %s;",
+                (board_id, user_id))
+    res = cur.fetchone()
+    if not bool(res):
+        return {"User has no access"}
+    role_id = res[0]
+
+    cur.execute("SELECT role_name FROM roles WHERE role_id = %s;",
+                (role_id,))
+    res = cur.fetchone()
+    if not bool(res):
+        return {"Role does not exist/unknown role"}
+    role_name = res[0]
+
+    result = {"Access level": role_name}
     return result
 
-# 1. READ: Проверить доступ пользователя к доске
-@app.get("/boards/{board_id}/{user_id}")
-def check_access(board_id : int, user_id : int):
-    b_id = str(board_id)
-    u_id = str(user_id)
-    cur.execute("SELECT * FROM link WHERE board_id = %s AND user_id = %s;", (b_id,u_id))
-    result = cur.fetchone()
-    return bool(result)
+# Получить все доски пользователя по имени
+@app.get("/user-boards/{user_name}")
+def get_user_boards(user_name: str):
+    try:
+        cur.execute("SELECT user_id FROM users WHERE user_name = %s;", (user_name,))
+        res = cur.fetchone()
+        if not bool(res):
+            return {"User does not exist"}
+        user_id = res[0]
 
-# 1. READ: Получить все доски пользователя
-@app.get("/userboards/{user_name}")
-def get_user_boards(user_name : str):
-    cur.execute("SELECT user_id FROM users WHERE name = %s;",(user_name,))
-    user_id = cur.fetchone()[0]
-    cur.execute("SELECT board_id FROM link WHERE user_id = %s;", (user_id,))
-    result = cur.fetchall()
-    return result
-
+        cur.execute("SELECT * FROM boards WHERE board_id IN"
+                    "(SELECT board_id FROM links WHERE user_id=%s);",
+                    (user_id,))
+        result = cur.fetchall()
+        return result
+    except Exception as e:
+        cancel(e)
 
 security = HTTPBearer()
-# 2. READ: Вернуть пользователя из токена
+
+
+# Вернуть пользователя из токена
 @app.get("/token")
 def get_user_by_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
@@ -265,21 +373,41 @@ def get_user_by_token(credentials: HTTPAuthorizationCredentials = Depends(securi
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# 2. READ: Получить содержимое доски
-@app.get("/boards/{board_id}")
-def get_board_data(board_id : int):
-    cur.execute("SELECT contents FROM boards WHERE board_id = %s;", (board_id,))
-    result = cur.fetchone()[0]
+
+# Получить содержимое доски по адресу
+@app.get("/boards/{address}")
+def get_board_data(address: str):
+    cur.execute("SELECT contents FROM boards WHERE address = %s;",
+                (address,))
+    result = cur.fetchone()
+    if not bool(result):
+        return {"Board does not exist"}
+
     return result
 
-# 3. UPDATE: изменение на доске
-@app.put("/boards/{board_id}")
-def update_board(board_id: int, board_contents: BoardContents):
+# изменение на доске по адресу
+@app.put("/boards/{address}")
+def update_board(address: str, board_contents: BoardContents):
     contents_json = json.dumps(board_contents.model_dump())
-    # Ищем задачу по ID
-    
-    cur.execute("UPDATE boards SET contents = %s WHERE board_id = %s RETURNING address,contents;",
-                (contents_json,str(board_id)))
-    result = cur.fetchone()
-    conn.commit()
+
+    cur.execute("SELECT board_id FROM boards WHERE address = %s;",
+                (address,))
+    res = cur.fetchone()
+    if not bool(res):
+        return {"Board does not exist"}
+
+    try:
+        cur.execute("UPDATE boards SET contents = %s WHERE address = %s RETURNING address,contents;",
+                    (contents_json, address))
+        result = cur.fetchone()
+        conn.commit()
+        return result
+    except Exception as e:
+        cancel(e)
+
+# Получить все роли (для дебага)
+@app.get("/roles")
+def get_roles(skip: int = 0, limit: int = 10):
+    cur.execute("SELECT * FROM roles OFFSET %s LIMIT %s;",(skip,limit))
+    result = cur.fetchall()
     return result
