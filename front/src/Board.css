@@ -52,7 +52,7 @@ button,h2,h3,span,input, ul, li{
   background-color: #EAD7C3;
   padding: 16px;
   border-radius: 20px;
-  min-width: 250px;
+  min-width:250px;
   height: min-content;
 }
 
@@ -88,7 +88,13 @@ button,h2,h3,span,input, ul, li{
   border: 1px solid #000000;
   border-radius: 10px;
   display: flex;
-  margin: 0 0 8px 8px;
+  margin: 8px 0 0 8px;
+}
+
+.addCardContainer {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
 }
 
 .column > div > input {
@@ -96,15 +102,21 @@ button,h2,h3,span,input, ul, li{
   background-color: #FBF6EF;
   border: 1px solid #000000;
   border-radius: 4px;
-  max-width: 200px;
+  margin: 8px 0 0 8px;
+  min-width: 0;
+  flex: 1 1 0;
 }
+
 
 .addcard{
   padding: 5px 15px 5px 15px;
   background-color: #FBF6EF;
   border: 1px solid #000000;
   border-radius: 4px;
-  margin: 0 0 8px 8px;
+  margin: 8px 0 0 8px;
+  min-width: 0;
+  max-width: fit-content;
+  flex: 1 1 0;
 }
 
 .column > button > img {
@@ -173,7 +185,7 @@ button,h2,h3,span,input, ul, li{
   background-color: #FBF6EF;
   border: 1px solid #000000;
   border-radius: 4px;
-  max-width: 200px;
+  flex: 1;
   margin: 8px 0 8px 0;
 }
 

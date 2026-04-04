@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Board from "./Board.jsx";
-import Register from "./Register.jsx"
-import Boardslist from "./Boardslist.jsx"
+import Register from "./Register.jsx";
+import Boardslist from "./Boardslist.jsx";
 
 function Home() {
   const [users, setUsers] = useState([]);
