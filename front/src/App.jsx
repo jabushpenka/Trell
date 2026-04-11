@@ -5,7 +5,7 @@ import Board from "./modules/Board.jsx";
 import Register from "./modules/Register.jsx";
 import Boardslist from "./modules/Boardslist.jsx";
 import Layout from "./modules/Layout.jsx";
-
+//ананас
 function Home() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({
