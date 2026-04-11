@@ -1,7 +1,7 @@
-import styles from "./styles/Template.module.css";
+import styles from "../styles/Template.module.css";
 import {nanoid} from "nanoid";
-import {quickPresets} from "./examples/Templatecards.js"/*Пока что хардкод*/
-import taskbutton from './assets/task-button.svg';
+import {quickPresets} from "../examples/Templatecards.js"/*Пока что хардкод*/
+import taskbutton from '../assets/task-button.svg';
 export default function Templates(){
     /*Пока что хардкод*/
     const presetsList = quickPresets.map(preset => {

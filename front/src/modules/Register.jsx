@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import {nanoid} from 'nanoid';
-import style from './styles/Register.module.css'
-import { createBoard } from './api.jsx';
-import { useNavigation } from './hooks/Navigation.jsx';
+import style from '../styles/Register.module.css'
+import { createBoard } from '../api.jsx';
+import { useNavigation } from '../hooks/Navigation.jsx';
 
 
 export default function Register() {

@@ -1,13 +1,13 @@
 @font-face {
     font-family: 'AnonymousPro';
-    src: url('fonts/AnonymousPro-Regular.ttf') format('truetype');
+    src: url('../fonts/AnonymousPro-Regular.ttf') format('truetype');
     font-weight: normal;
     font-style: normal;
 } 
 
 @font-face {
     font-family: 'AnonymousPro-Bold';
-    src: url('fonts/AnonymousPro-Bold.ttf') format('truetype');
+    src: url('..fonts/AnonymousPro-Bold.ttf') format('truetype');
     font-weight: normal;
     font-style: normal;
 } 

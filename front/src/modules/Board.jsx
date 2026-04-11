@@ -1,16 +1,16 @@
-import styles from "./styles/Board.module.css";
+import styles from "../styles/Board.module.css";
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom"; //для использования данных, полученных при переходе через navigate
 import {nanoid} from "nanoid";
 import Templates from "./Templates.jsx";
 
-import trashbold from './assets/trash-bold.svg';
-import trashregular from './assets/trash-regular.svg';
-import plus from './assets/plus.svg';
-import add from './assets/add.svg';
-import taskbuttondone from './assets/task-button-done.svg';
-import taskbutton from './assets/task-button.svg';
-import changeapply from './assets/change-apply.svg';
+import trashbold from '../assets/trash-bold.svg';
+import trashregular from '../assets/trash-regular.svg';
+import plus from '../assets/plus.svg';
+import add from '../assets/add.svg';
+import taskbuttondone from '../assets/task-button-done.svg';
+import taskbutton from '../assets/task-button.svg';
+import changeapply from '../assets/change-apply.svg';
 
 export default function Board() {
   const [boardData,setBoardData] = useState({columns: []});
